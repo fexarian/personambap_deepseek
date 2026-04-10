@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  mbap-bot:
+    build: .
+    container_name: mbap-bot
+    restart: unless-stopped
+    env_file: .env
+    networks: - mbap-net
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    volumes: - ollama-data:/root/.ollama
+    ports: - "11434:11434"
+networks: mbap-net:
+volumes: ollama-data:
