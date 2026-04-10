@@ -1,77 +1,40 @@
-# Mbap Telegram Bot
+# Mbap Bot - Multi AI Provider
 
-RAG-based Telegram bot that responds as Mbap (Dicky Zainal Arifin) using local knowledge base.
+Telegram bot with **OpenRouter, GLM-5, and Local Ollama** support.
 
-## Requirements
+## Features
+- 🔄 Switch providers on the fly
+- 🤖 Local LLM (Gemma 2B via Ollama)
+- ☁️ Cloud models via OpenRouter & GLM-5
+- 📚 RAG with local knowledge base (optional)
 
-- Python 3.8+
-- Telegram Bot Token
-
-## Installation
-
+## Quick Start
 ```bash
-# Clone repository
-git clone https://github.com/fexarian/personambap_deepseek/mbap_bot.git
-cd mbap_bot
-
-# Install dependencies
+cp .env.example .env
+# Edit .env with your API keys
 pip install -r requirements.txt
-```
-
-## Setup
-
-### 1. Get Telegram Bot Token
-
-1. Open Telegram, chat with @BotFather
-2. Use /newbot to create new bot
-3. Save the token
-
-### 2. Add Bot to Group
-
-1. Add @YourBotUsername to your group
-2. Make sure bot has permission to read messages
-
-### 3. Configure Knowledge Base
-
-Edit `kb.json` to add your knowledge base:
-
-```json
-[
-  {"text": "Content chunk 1..."},
-  {"text": "Content chunk 2..."}
-]
-```
-
-## Running
-
-```bash
-# Set bot token
-export TELEGRAM_BOT_TOKEN="your_bot_token_here"
-
-# Run bot
 python bot.py
 ```
 
-## Usage
+## Commands
+| Command | Action |
+|---------|--------|
+| `/provider` | Show active AI |
+| `/switch_openrouter` | Use OpenRouter |
+| `/switch_glm5` | Use GLM-5 |
+| `/switch_ollama` | Use local Ollama |
 
-In group:
-- Mention bot: `@MbapDickyBot pertanyaan Anda`
-- Bot will respond using knowledge base
+## Environment Variables
+```env
+TELEGRAM_BOT_TOKEN=xxx
+OPENROUTER_API_KEY=xxx
+GLM_API_KEY=xxx
+OLLAMA_HOST=http://localhost:11434
+```
 
-## Knowledge Base
+## With Docker
+```bash
+docker-compose up -d
+```
 
-The bot uses `kb.json` for responses. Add more content to improve responses.
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `bot.py` | Main bot entry point |
-| `rag_engine.py` | Search engine |
-| `persona.py` | Persona enforcement |
-| `kb.json` | Knowledge base |
-| `requirements.txt` | Python dependencies |
-
-## License
-
-MIT
+Original RAG files (`rag_engine.py`, `kb.json`) preserved for compatibility.
