@@ -1,134 +1,59 @@
-#!/usr/bin/env python3
-"""
-Mbap Telegram Bot - RAG Lightweight Version
-Uses keyword-based search (no heavy ML dependencies)
-"""
-import os
-import re
-import json
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import os, logging, requests
+from dotenv import load_dotenv
+from telegram import Update,.ext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-# Import local modules
-from rag_engine import search_kb
-from persona import apply_mbap_style
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Try to import LLM engine (optional)
-try:
-    from llm_engine import answer_question as llm_answer
-    HAS_LLM = True
-except:
-    HAS_LLM = False
+# Multi-provider config
+PROVIDERS = {
+    "openrouter": {"url": "https://openrouter.ai/api/v1/chat/completions", "key": os.getenv("OPENROUTER_API_KEY"), "model": os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")},
+    "glm5": {"url": "https://api.us-west-2.modal.direct/v1/chat/completions", "key": os.getenv("GLM_API_KEY"), "model": "zai-org/GLM-5.1-FP8"},
+    "ollama": {"url": f"{os.getenv('OLLAMA_HOST', 'http://localhost:11434')}/api/generate", "key": None, "model": os.getenv("OLLAMA_MODEL", "gemma2:2b")}
+}
+current = "openrouter"
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+async def start(upd, ctx):
+    await upd.message.reply_text("🤖 Mbap Bot Active!\nMulti-provider: OpenRouter, GLM-5, Ollama\nGunakan /provider")
 
-# Get bot token from environment
-BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-if not BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set!")
+async def provider(upd, ctx):
+    await upd.message.reply_text(f"Active: {current}\nModel: {PROVIDERS[current]['model']}")
 
-# Bot username for mention detection
-BOT_USERNAME = "@mbapdickybot"
-
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command"""
-    await update.message.reply_text(
-        "Mbap Bot aktif. Mention untuk bertanya.\n"
-        "Gunakan: @MbapDickyBot pertanyaan anda"
-    )
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command"""
-    await update.message.reply_text(
-        "Cara menggunakan:\n"
-        f"1. Mention bot: {BOT_USERNAME} pertanyaan\n"
-        "2. Contoh: @MbapDickyBot apa itu keraton Boko?"
-    )
-
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle incoming messages in groups"""
-    message = update.message
-    text = message.text or ""
-    chat = message.chat
-    
-    # Only respond in groups
-    if chat.type not in ['group', 'supergroup']:
-        return
-    
-    # Check if bot is mentioned
-    entities = message.entities or []
-    mentioned = False
-    
-    for entity in entities:
-        if entity.type == "mention":
-            mentioned = True
-            break
-    
-    # Also check if bot username in text
-    if BOT_USERNAME.lower() in text.lower():
-        mentioned = True
-    
-    if not mentioned:
-        return
-    
-    # Remove mention from text
-    clean_query = re.sub(r'@\w+\s*', '', text).strip()
-    
-    if not clean_query:
-        return
-    
-    logger.info(f"Query: {clean_query[:50]}...")
-    
-    # Use LLM if available
-    if HAS_LLM:
-        try:
-            response = llm_answer(clean_query)
-        except Exception as e:
-            logger.error(f"LLM error: {e}")
-            results = search_kb(clean_query, top_k=1)
-            response = results[0] if results else "Mbap belum menelusuri lebih lanjut..."
+async def switch(upd, ctx, name):
+    global current
+    if name in PROVIDERS and (PROVIDERS[name].get("key") or name == "ollama"):
+        current = name
+        await upd.message.reply_text(f"✅ Switched to {name}")
     else:
-        # Fallback to keyword search
-        results = search_kb(clean_query, top_k=1)
-        response = results[0] if results else "Mbap belum menelusuri lebih lanjut..."
-    
-    # Apply Mbap persona style
-    response = apply_mbap_style(response)
-    
-    # Send reply
-    await message.reply_text(response)
+        await upd.message.reply_text(f"❌ {name} not available (check API key)")
 
+async def chat(upd, ctx):
+    msg = upd.message.text
+    await upd.message.chat.send_action("typing")
+    try:
+        p = PROVIDERS[current]
+        if current == "ollama":
+            resp = requests.post(p["url"], json={"model": p["model"], "prompt": msg, "stream": False}, timeout=60)
+            reply = resp.json().get("response", "No response")
+        else:
+            resp = requests.post(p["url"], headers={"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"},
+                                json={"model": p["model"], "messages": [{"role": "user", "content": msg}], "max_tokens": 500}, timeout=60)
+            reply = resp.json()["choices"][0]["message"]["content"]
+        await upd.message.reply_text(reply[:4000])
+    except Exception as e:
+        await upd.message.reply_text(f"Error: {str(e)[:100]}\nCoba /switch ke provider lain")
 
 def main():
-    """Start the bot"""
-    logger.info("Starting Mbap Bot...")
-    
-    # Create application
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Add handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & filters.ChatType.GROUPS,
-            handle_message
-        )
-    )
-    
-    # Start polling
-    logger.info("Bot started! Waiting for messages...")
-    application.run_polling(allowed_updates=[Update.MESSAGE])
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("provider", provider))
+    app.add_handler(CommandHandler("switch_openrouter", lambda u,c: switch(u,c,"openrouter")))
+    app.add_handler(CommandHandler("switch_glm5", lambda u,c: switch(u,c,"glm5")))
+    app.add_handler(CommandHandler("switch_ollama", lambda u,c: switch(u,c,"ollama")))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+    print("✅ Bot with multi-provider running!")
+    app.run_polling()
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
