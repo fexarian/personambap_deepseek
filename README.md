@@ -11,7 +11,7 @@ RAG-based Telegram bot that responds as Mbap (Dicky Zainal Arifin) using local k
 
 ```bash
 # Clone repository
-git clone https://github.com/ganikurniabagja-byte/mbap_bot.git
+git clone https://github.com/fexarian/personambap_deepseek/mbap_bot.git
 cd mbap_bot
 
 # Install dependencies
